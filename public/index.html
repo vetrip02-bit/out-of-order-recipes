@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Out of Order · Chain, Race, Recover</title>
+<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23e08a3a'/><path d='M4 6.5h8M4 9.5h8' stroke='%23fff' stroke-width='1.5' stroke-linecap='round'/></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">Out of <b>Order</b></span>
+  <span class="crumb">Chain, Race, Recover · Recipes API</span>
+  <span class="topbar-meta" id="apiBase"></span>
+</header>
+
+<main class="stage">
+
+  <!-- ===================== mode switch ===================== -->
+  <nav class="modes" aria-label="Version">
+    <a class="mode mode--broken" id="modeBroken" href="?mode=broken">
+      <span class="mode__title">Broken version</span>
+      <span class="mode__sub">no stale-response protection</span>
+    </a>
+    <a class="mode mode--corrected" id="modeCorrected" href="?mode=corrected">
+      <span class="mode__title">Corrected version</span>
+      <span class="mode__sub">request generations + stale guard</span>
+    </a>
+  </nav>
+
+  <p class="banner" id="modeBanner"></p>
+
+  <!-- ===================== controls ===================== -->
+  <div class="controls">
+    <button class="btn btn--primary" id="runBtn" type="button">Run chain again</button>
+
+    <div class="control-group">
+      <button class="btn btn--danger" id="failBtn" type="button">Test failure</button>
+      <label class="sr-only" for="failId">Meal id used by Test failure</label>
+      <select id="failId" class="select">
+        <option value="1">/meal/1 · missing id (404)</option>
+        <option value="0">/meal/0 · invalid id (400)</option>
+      </select>
+    </div>
+
+    <label class="toggle" id="abortToggle" hidden>
+      <input type="checkbox" id="abortBox" />
+      also abort superseded requests (AbortController)
+    </label>
+
+    <p class="selection" aria-live="polite">
+      Latest selection: <strong id="latestSel">—</strong>
+    </p>
+  </div>
+
+  <div class="layout">
+    <article id="card" class="card">
+
+      <!-- ===================== left: the selected meal (level 3) ===================== -->
+      <section class="card__visual" id="panelMeal" data-state="loading" aria-live="polite">
+        <img id="heroImg" class="hero__img real" alt="" />
+        <span class="sk skeleton sk-hero"></span>
+
+        <p class="card__index real" id="mealId"></p>
+        <span class="sk skeleton sk-line sk-index"></span>
+
+        <h1 class="card__name real" id="mealName"></h1>
+        <span class="sk skeleton sk-line sk-name"></span>
+
+        <p class="genus real" id="mealWhere"></p>
+        <span class="sk skeleton sk-line sk-genus"></span>
+
+        <ul class="tagline real" id="mealTags"></ul>
+
+        <p class="mismatch" id="mismatch" hidden></p>
+
+        <p class="card__src">L3 · /meal/{id} · 500 ms</p>
+        <p class="card__err panel__err" id="mealErr"></p>
+      </section>
+
+      <!-- ===================== right: every other level ===================== -->
+      <section class="card__data">
+
+        <!-- level 1 -->
+        <div class="panel panel--wide" id="panelRail" data-state="loading">
+          <div class="panel__head">
+            <h2>Categories</h2>
+            <span class="panel__busy">loading…</span>
+            <span class="panel__src">L1 · /categories · 2000 ms</span>
+          </div>
+          <ul class="rail real" id="rail"></ul>
+          <span class="sk skeleton sk-rail"></span>
+          <p class="panel__err"></p>
+        </div>
+
+        <!-- level 2 -->
+        <div class="panel panel--wide" id="panelTiles" data-state="loading">
+          <div class="panel__head">
+            <h2>Meals in the category</h2>
+            <span class="panel__busy">loading…</span>
+            <span class="panel__src">L2 · /category/{name} · 1000 ms</span>
+          </div>
+          <p class="muted real" id="tilesLabel"></p>
+          <ul class="tiles real" id="tiles"></ul>
+          <span class="sk skeleton sk-tiles"></span>
+          <p class="panel__err"></p>
+        </div>
+
+        <!-- level 3 -->
+        <div class="panel panel--wide" id="panelIngredients" data-state="loading">
+          <div class="panel__head">
+            <h2>Ingredients</h2>
+            <span class="panel__src">L3 · /meal/{id} · 500 ms</span>
+          </div>
+          <p class="muted real" id="ingsLabel"></p>
+          <ul class="ings real" id="ings"></ul>
+          <div class="sk sk-stack">
+            <span class="skeleton sk-box"></span>
+            <span class="skeleton sk-box"></span>
+          </div>
+          <p class="panel__err"></p>
+        </div>
+
+        <div class="panel panel--wide" id="panelSteps" data-state="loading">
+          <div class="panel__head">
+            <h2>Method</h2>
+            <span class="panel__src">L3 · /meal/{id} · 500 ms</span>
+          </div>
+          <ol class="steps-list real" id="steps"></ol>
+          <div class="sk sk-stack">
+            <span class="skeleton sk-line"></span>
+            <span class="skeleton sk-line w-90"></span>
+            <span class="skeleton sk-line w-70"></span>
+          </div>
+          <p class="panel__err"></p>
+        </div>
+
+        <!-- level 4 -->
+        <div class="panel" id="panelDossier" data-state="loading">
+          <div class="panel__head">
+            <h2>Ingredient dossier</h2>
+            <span class="panel__src">L4 · /ingredient/{name} · 300 ms</span>
+          </div>
+          <div class="item real">
+            <img class="item__img" id="dossierImg" alt="" />
+            <div>
+              <p class="lead-name" id="dossierName"></p>
+              <p class="lead-text" id="dossierMeasure"></p>
+            </div>
+          </div>
+          <p class="lead-text real" id="dossierText"></p>
+          <div class="sk sk-stack">
+            <span class="skeleton sk-box"></span>
+            <span class="skeleton sk-line w-90"></span>
+          </div>
+          <p class="panel__err"></p>
+        </div>
+
+        <div class="panel" id="panelCuisine" data-state="loading">
+          <div class="panel__head">
+            <h2>More from this cuisine</h2>
+            <span class="panel__src">L4 · /area/{name} · 300 ms</span>
+          </div>
+          <p class="muted real panel__count"></p>
+          <ul class="mini-tiles real" id="cuisineList"></ul>
+          <span class="sk skeleton sk-mini"></span>
+          <p class="panel__err"></p>
+        </div>
+
+        <!-- level 5 -->
+        <div class="panel panel--wide" id="panelAlso" data-state="loading">
+          <div class="panel__head">
+            <h2>Meals using the selected ingredient</h2>
+            <span class="panel__src">L5 · /by-ingredient/{canonical name} · 200 ms</span>
+          </div>
+          <p class="muted real panel__count"></p>
+          <ul class="mini-tiles real" id="alsoList"></ul>
+          <span class="sk skeleton sk-mini"></span>
+          <p class="panel__err"></p>
+        </div>
+
+      </section>
+    </article>
+
+    <!-- ===================== request / arrival log ===================== -->
+    <aside class="panel logpanel" id="panelLog">
+      <div class="panel__head">
+        <h2>Request / arrival log</h2>
+        <button class="btn btn--sm" id="clearLog" type="button">Clear</button>
+      </div>
+      <ul class="legend">
+        <li><span class="k k--select">SELECT</span> new selection</li>
+        <li><span class="k k--start">START</span> request sent</li>
+        <li><span class="k k--done">DONE</span> response arrived</li>
+        <li><span class="k k--fail">FAIL</span> HTTP / network error</li>
+        <li><span class="k k--ignored">IGNORED</span> stale, not painted</li>
+        <li><span class="k k--stale">STALE PAINTED</span> old data shown</li>
+      </ul>
+      <ol class="log" id="log"></ol>
+    </aside>
+  </div>
+
+</main>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

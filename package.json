@@ -1,0 +1,14 @@
+{
+  "name": "out-of-order-recipes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Out of Order - Chain, Race, Recover: a recipe page built from a real 5-level request chain, in a broken and a corrected version.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
