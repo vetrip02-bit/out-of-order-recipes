@@ -4,9 +4,9 @@
  *  L1 /categories ─► L2 /category/{name} ─► L3 /meal/{id} ─┬► L4 /area/{name}
  *                                                           └► L4 /ingredient/{name} ─► L5 /by-ingredient/{canonical}
  *
- * A category shows 4 meal cards. Each card waits a different time before
- * its /meal request is sent (CARD_DELAYS: 4 s, 3 s, 2 s, 1 s), so a card
- * clicked first can answer last.
+ * L1 shows 4 category cards and a category shows 4 meal cards. Each meal
+ * card waits a different time before its /meal request is sent
+ * (CARD_DELAYS: 4 s, 3 s, 2 s, 1 s), so a card clicked first can answer last.
  *
  * The ONLY difference between the two versions is `corrected`:
  *   broken     a new click never aborts anything. The older click's
@@ -20,6 +20,9 @@
 import { api } from './api.js';
 import { log } from './log.js';
 import * as ui from './ui.js';
+
+/* L1 shows the first 4 categories as cards */
+const CATEGORY_CARDS = 4;
 
 /* card 1 … card 4: simulated wait before /meal/{id} is sent */
 export const CARD_DELAYS = [4000, 3000, 2000, 1000];
@@ -77,8 +80,9 @@ export function createChain({ corrected }) {
         const { categories } = await api.categories(req);
         if (isStale(gen, req, what)) return;
 
-        ui.renderRail(categories, req.tag);
-        categoryName = categories[state.categoryTurn++ % categories.length].name;
+        const shown = categories.slice(0, CATEGORY_CARDS);
+        ui.renderRail(shown, categories.length, req.tag);
+        categoryName = shown[state.categoryTurn++ % shown.length].name;
         log.choose(req.tag, categoryName);
       }
 

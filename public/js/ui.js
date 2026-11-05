@@ -106,8 +106,9 @@ export function failFrom(stage, err) {
 
 /* ---------- level 1 ---------- */
 
-export function renderRail(categories, tag) {
+export function renderRail(categories, total, tag) {
   log.painted(tag, 'category list');
+  $('#railLabel').textContent = `First ${categories.length} of ${total} categories.`;
   $('#rail').innerHTML = categories.map((c) => `
     <li>
       <button class="rail__item" type="button" data-category="${esc(c.name)}">

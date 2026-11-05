@@ -20,9 +20,11 @@ One switch, `corrected`, changes one thing:
 | **Broken** | `?mode=broken` | …the previous click's requests are **not aborted**. They keep running, and when they answer they paint over the newer click (red **STALE PAINTED** rows, "⚠ Stale overwrite" box). |
 | **Corrected** | `?mode=corrected` | …the previous click's requests are **aborted** with an `AbortController` (**ABORTED** rows). A generation number is also checked after every `await` as the final safeguard. |
 
-## The four meal cards
+## Four category cards and four meal cards
 
-Clicking a category (L1) shows the **first 4 meals** of that category as cards (L2). Each card
+The category panel (L1) shows the **first 4 categories** from `/categories` as cards (Beef,
+Chicken, Dessert and Lamb today). Clicking one shows the **first 4 meals** of that category as
+cards (L2). Each card
 waits a different time before its `/meal/{id}` request is sent:
 
 | Card | Wait before `/meal/{id}` | Total time to answer |
@@ -80,7 +82,7 @@ always does).
 ### The chain (real delays from the API)
 
 ```
-L1 /categories (2000 ms)
+L1 /categories (2000 ms)                    → first 4 categories become cards
  └─► L2 /category/{name} (1000 ms)            → first 4 meals become cards
       └─► L3 /meal/{id} (card wait + 500 ms)
            ├─► L4 /area/{area} (300 ms)          ┐ started together
@@ -88,8 +90,8 @@ L1 /categories (2000 ms)
                 └─► L5 /by-ingredient/{canonical name} (200 ms)
 ```
 
-- **Page load** and **Run chain again** start at L1, pick the next category, then a card (fastest
-  card first).
+- **Page load** and **Run chain again** start at L1, pick the next of the 4 category cards, then a
+  meal card (fastest card first).
 - A **category** click starts at L2. A **card** or **Test failure** click starts at L3.
 - An **ingredient** click starts again from L4: `/ingredient`, then `/by-ingredient`.
 - The meal lists in L4 / L5 are clickable too (no card wait).
@@ -261,13 +263,13 @@ Do not reuse anyone else's screenshots. Take these yourself.
 Both versions run this file. `corrected` is `false` in the broken version and `true` in the
 corrected one.
 
-**Line 28 — the latest selection's number**
+**Line 31 — the latest selection's number**
 ```js
 let generation = 0;
 ```
 > "I keep a counter that says which click is the newest one."
 
-**Lines 35–38 — abort the previous click (the difference between the versions)**
+**Lines 38–41 — abort the previous click (the difference between the versions)**
 ```js
 const gen = ++generation;
 if (corrected) {
@@ -279,7 +281,7 @@ if (corrected) {
 > previous click, including a card that is still waiting, and give the new click a fresh
 > controller. The broken version skips this, so old requests keep running."
 
-**Lines 45–46 — the final safeguard**
+**Lines 48–49 — the final safeguard**
 ```js
 function isStale(gen, req, what, err) {
   if (!corrected || gen === generation) return false;
@@ -287,8 +289,8 @@ function isStale(gen, req, what, err) {
 > "After every response or error I ask: is this still the newest click? If not, I drop it and
 > log IGNORED. In the broken version this check is switched off, so old answers are painted."
 
-**After every `await` — lines 78 (`/categories`), 92 (`/category`), 116 (`/meal`), 141 (`/area`),
-163 (`/ingredient`), 170 (`/by-ingredient`); in every `catch` — lines 127, 146, 174**
+**After every `await` — lines 81 (`/categories`), 96 (`/category`), 120 (`/meal`), 145 (`/area`),
+167 (`/ingredient`), 174 (`/by-ingredient`); in every `catch` — lines 131, 150, 178**
 ```js
 if (isStale(gen, req, what)) return;
 ```

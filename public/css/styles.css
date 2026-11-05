@@ -149,15 +149,16 @@ a { color: inherit; }
 
 /* ---------- 6. levels ---------- */
 /* L1 categories */
-.rail { display: flex; gap: 8px; overflow-x: auto; list-style: none; padding-bottom: 4px; scrollbar-width: thin; }
+.rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; list-style: none; }
 .rail__item {
-  display: grid; justify-items: center; gap: 4px; width: 84px; padding: 8px 4px 7px; cursor: pointer;
+  display: grid; justify-items: center; gap: 6px; width: 100%; padding: 14px 8px 12px; cursor: pointer;
   background: var(--surface-2); border: 1.5px solid transparent; border-radius: 12px;
+  transition: border-color .15s, transform .15s;
 }
-.rail__item:hover { border-color: var(--line-2); }
-.rail__item.is-current { border-color: var(--accent); background: var(--accent-bg); }
-.rail__img { width: 38px; height: 38px; object-fit: contain; }
-.rail__name { font-size: 12px; font-weight: 600; }
+.rail__item:hover { border-color: var(--line-2); transform: translateY(-2px); }
+.rail__item.is-current { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px var(--accent-bg); }
+.rail__img { width: 64px; height: 64px; object-fit: contain; }
+.rail__name { font-size: 14px; font-weight: 600; }
 
 /* L3 meal */
 .meal__body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
@@ -308,7 +309,7 @@ a { color: inherit; }
 @media (max-width: 860px) {
   .intro { grid-template-columns: 1fr; }
   .duo { grid-template-columns: 1fr; }
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards, .rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .meal__body, .meal__sk { grid-template-columns: 1fr; }
   .meal__img { max-width: 320px; }
 }
