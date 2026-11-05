@@ -1,17 +1,16 @@
 /* ------------------------------------------------------------------ *
  * app.js - picks the version from ?mode= and wires the controls.
  *
- *   ?mode=broken      chain-broken.js     (no stale-response protection)
- *   ?mode=corrected   chain-corrected.js  (request generations + guard)
+ *   ?mode=broken      createChain({ corrected: false })  never aborts
+ *   ?mode=corrected   createChain({ corrected: true })   aborts the previous click
  *
  * Switching version reloads the page, so no request from one version can
  * ever land in the other.
  * ------------------------------------------------------------------ */
 
-import { BASE, DIRECT, HUB, asset } from './api.js';
+import { BASE, DIRECT, HUB } from './api.js';
 import { log } from './log.js';
-import { createBrokenChain } from './chain-broken.js';
-import { createCorrectedChain } from './chain-corrected.js';
+import { createChain } from './chain.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -20,29 +19,35 @@ const mode = params.get('mode') === 'broken' ? 'broken' : 'corrected';
 document.body.dataset.mode = mode;
 
 /* keep ?direct=1 when switching version */
-for (const link of document.querySelectorAll('.mode')) {
-  if (DIRECT) link.href += '&direct=1';
+for (const link of document.querySelectorAll('.switch__opt')) {
+  if (params.has('direct')) link.href += '&direct=1';
 }
-$(mode === 'broken' ? '#modeBroken' : '#modeCorrected').classList.add('is-active');
-$(mode === 'broken' ? '#modeBroken' : '#modeCorrected').setAttribute('aria-current', 'page');
+const active = $(mode === 'broken' ? '#modeBroken' : '#modeCorrected');
+active.classList.add('is-active');
+active.setAttribute('aria-current', 'page');
 
-$('#modeBanner').innerHTML = mode === 'broken'
-  ? '<strong>BROKEN VERSION</strong> - plain fetch-and-display. Every response is painted when it arrives, '
-    + 'even if you have selected something newer since. Watch for red <b>STALE PAINTED</b> rows in the log.'
-  : '<strong>CORRECTED VERSION</strong> - every selection gets a new generation; a response may only paint, '
-    + 'or start the next request, while its generation is still the latest. Late answers show as amber <b>IGNORED</b> rows.';
+const TEXT = {
+  broken: {
+    eyebrow: 'Broken version',
+    title: 'A new click never aborts the previous request',
+    text: 'Click card 1 (4 s) and then card 2 (3 s) straight away. Card 2 answers first, then card 1 is still '
+      + 'running and its late answer paints over it. Watch for red STALE PAINTED rows in the log.',
+  },
+  corrected: {
+    eyebrow: 'Corrected version',
+    title: 'A new click aborts the previous request',
+    text: 'Click card 1 (4 s) and then card 2 (3 s) straight away. Card 1’s request is aborted the moment you '
+      + 'click card 2, so only card 2 is shown. Watch for ABORTED rows in the log.',
+  },
+}[mode];
+$('#modeEyebrow').textContent = TEXT.eyebrow;
+$('#modeTitle').textContent = TEXT.title;
+$('#modeText').textContent = TEXT.text;
 
 $('#apiBase').textContent = DIRECT ? `API ${BASE}` : `API /api/mealdb → ${HUB}/api/mealdb (local proxy)`;
 document.title = `${mode === 'broken' ? 'Broken' : 'Corrected'} · Out of Order`;
 
-$('#abortToggle').hidden = mode !== 'corrected';
-
-/* race demo card images come from the API host, like every other image */
-for (const img of document.querySelectorAll('.race img[data-thumb]')) img.src = asset(img.dataset.thumb);
-
-const chain = mode === 'broken'
-  ? createBrokenChain()
-  : createCorrectedChain({ useAbort: () => $('#abortBox').checked });
+const chain = createChain({ corrected: mode === 'corrected' });
 
 /* ---------- every entry point is a new selection ---------- */
 
@@ -58,19 +63,16 @@ $('#clearLog').addEventListener('click', () => log.clear());
 document.addEventListener('click', (e) => {
   const category = e.target.closest('[data-category]');
   if (category) {
-    /* the broken version routes category clicks through its buggy selectCategory */
-    const entry = { category: category.dataset.category, label: `category "${category.dataset.category}"` };
-    if (chain.selectCategory) chain.selectCategory(entry);
-    else chain.run(entry);
+    chain.run({ category: category.dataset.category, label: `category "${category.dataset.category}"` });
     return;
   }
   const meal = e.target.closest('[data-meal]');
   if (meal) {
-    const delayMs = Number(meal.dataset.delay) || 0;   // race demo cards only
+    const delayMs = Number(meal.dataset.delay) || 0;   // meal cards wait 4 / 3 / 2 / 1 s
     chain.run({
       mealId: meal.dataset.meal,
       delayMs,
-      label: `meal ${meal.dataset.meal} "${meal.dataset.name}"${delayMs ? ` (race card, ${delayMs / 1000} s)` : ''}`,
+      label: `meal ${meal.dataset.meal} "${meal.dataset.name}"${delayMs ? ` (${delayMs / 1000} s card)` : ''}`,
     });
     return;
   }

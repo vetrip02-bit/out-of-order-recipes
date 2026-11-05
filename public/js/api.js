@@ -32,7 +32,7 @@ export class ApiError extends Error {
   }
 }
 
-/* race demo only: wait before sending, so one request can answer later than another */
+/* meal cards only: wait before sending, so one request can answer later than another */
 function pause(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException('aborted', 'AbortError'));
@@ -46,7 +46,7 @@ function pause(ms, signal) {
 
 /**
  * req = { tag, signal?, delayMs? } - tag labels the log rows with the selection number;
- * delayMs (race demo cards only) is a simulated wait before the request is sent
+ * delayMs (meal cards only) is a simulated wait before the request is sent
  */
 async function get(path, req) {
   const url = BASE + path;

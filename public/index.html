@@ -5,222 +5,199 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Out of Order · Chain, Race, Recover</title>
 <link rel="stylesheet" href="./css/styles.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23e08a3a'/><path d='M4 6.5h8M4 9.5h8' stroke='%23fff' stroke-width='1.5' stroke-linecap='round'/></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='4' fill='%23e8622c'/><path d='M4.5 5.5h7M4.5 8h4.5M4.5 10.5h6' stroke='%23fff' stroke-width='1.4' stroke-linecap='round'/></svg>" />
 </head>
 <body>
 
-<header class="topbar">
-  <span class="brand">Out of <b>Order</b></span>
-  <span class="crumb">Chain, Race, Recover · Recipes API</span>
-  <span class="topbar-meta" id="apiBase"></span>
+<!-- ===================== top bar + version switch ===================== -->
+<header class="top">
+  <div class="brand">
+    <span class="brand__logo" aria-hidden="true"></span>
+    <span class="brand__text"><b>Out of Order</b><small>Chain · Race · Recover</small></span>
+  </div>
+  <nav class="switch" aria-label="Version">
+    <a class="switch__opt switch__opt--broken" id="modeBroken" href="?mode=broken">Broken</a>
+    <a class="switch__opt switch__opt--corrected" id="modeCorrected" href="?mode=corrected">Corrected</a>
+  </nav>
 </header>
 
-<main class="stage">
+<main class="page">
 
-  <!-- ===================== mode switch ===================== -->
-  <nav class="modes" aria-label="Version">
-    <a class="mode mode--broken" id="modeBroken" href="?mode=broken">
-      <span class="mode__title">Broken version</span>
-      <span class="mode__sub">no stale-response protection</span>
-    </a>
-    <a class="mode mode--corrected" id="modeCorrected" href="?mode=corrected">
-      <span class="mode__title">Corrected version</span>
-      <span class="mode__sub">request generations + stale guard</span>
-    </a>
-  </nav>
-
-  <p class="banner" id="modeBanner"></p>
-
-  <!-- ===================== controls ===================== -->
-  <div class="controls">
-    <button class="btn btn--primary" id="runBtn" type="button">Run chain again</button>
-
-    <div class="control-group">
-      <button class="btn btn--danger" id="failBtn" type="button">Test failure</button>
-      <label class="sr-only" for="failId">Meal id used by Test failure</label>
-      <select id="failId" class="select">
-        <option value="1">/meal/1 · missing id (404)</option>
-        <option value="0">/meal/0 · invalid id (400)</option>
-      </select>
+  <!-- ===================== what this version does + controls ===================== -->
+  <section class="intro">
+    <div class="intro__text">
+      <p class="eyebrow" id="modeEyebrow"></p>
+      <h1 id="modeTitle"></h1>
+      <p id="modeText"></p>
     </div>
+    <div class="intro__tools">
+      <div class="tools">
+        <button class="btn btn--primary" id="runBtn" type="button">Run chain again</button>
+        <button class="btn btn--danger" id="failBtn" type="button">Test failure</button>
+        <label class="sr-only" for="failId">Meal id used by Test failure</label>
+        <select id="failId" class="select">
+          <option value="1">/meal/1 · missing (404)</option>
+          <option value="0">/meal/0 · invalid (400)</option>
+        </select>
+      </div>
+      <p class="latest" aria-live="polite">Latest selection <strong id="latestSel">—</strong></p>
+      <p class="api" id="apiBase"></p>
+    </div>
+  </section>
 
-    <label class="toggle" id="abortToggle" hidden>
-      <input type="checkbox" id="abortBox" />
-      also abort superseded requests (AbortController)
-    </label>
+  <div class="grid">
+    <div class="flow">
 
-    <p class="selection" aria-live="polite">
-      Latest selection: <strong id="latestSel">—</strong>
-    </p>
-  </div>
-
-  <div class="layout">
-    <article id="card" class="card">
-
-      <!-- ===================== left: the selected meal (level 3) ===================== -->
-      <section class="card__visual" id="panelMeal" data-state="loading" aria-live="polite">
-        <img id="heroImg" class="hero__img real" alt="" />
-        <span class="sk skeleton sk-hero"></span>
-
-        <p class="card__index real" id="mealId"></p>
-        <span class="sk skeleton sk-line sk-index"></span>
-
-        <h1 class="card__name real" id="mealName"></h1>
-        <span class="sk skeleton sk-line sk-name"></span>
-
-        <p class="genus real" id="mealWhere"></p>
-        <span class="sk skeleton sk-line sk-genus"></span>
-
-        <ul class="tagline real" id="mealTags"></ul>
-
-        <p class="mismatch" id="mismatch" hidden></p>
-
-        <p class="card__src">L3 · /meal/{id} · 500 ms</p>
-        <p class="card__err panel__err" id="mealErr"></p>
+      <!-- L1 -->
+      <section class="panel" id="panelRail" data-state="loading">
+        <header class="panel__head">
+          <span class="lvl">L1</span>
+          <h2>Categories</h2>
+          <span class="panel__busy">loading…</span>
+          <code class="src">/categories · 2 s</code>
+        </header>
+        <ul class="rail real" id="rail"></ul>
+        <span class="sk skeleton sk-rail"></span>
+        <p class="panel__err"></p>
       </section>
 
-      <!-- ===================== right: every other level ===================== -->
-      <section class="card__data">
+      <!-- L2 -->
+      <section class="panel" id="panelTiles" data-state="loading">
+        <header class="panel__head">
+          <span class="lvl">L2</span>
+          <h2>Meals</h2>
+          <span class="panel__busy">loading…</span>
+          <code class="src">/category/{name} · 1 s</code>
+        </header>
+        <p class="hint real" id="tilesLabel"></p>
+        <ul class="cards real" id="tiles"></ul>
+        <span class="sk skeleton sk-cards"></span>
+        <p class="panel__err"></p>
+      </section>
 
-        <!-- level 1 -->
-        <div class="panel panel--wide" id="panelRail" data-state="loading">
-          <div class="panel__head">
-            <h2>Categories</h2>
-            <span class="panel__busy">loading…</span>
-            <span class="panel__src">L1 · /categories · 2000 ms</span>
+      <!-- L3 -->
+      <section class="panel meal" id="panelMeal" data-state="loading" aria-live="polite">
+        <header class="panel__head">
+          <span class="lvl">L3</span>
+          <h2>Selected meal</h2>
+          <code class="src">/meal/{id} · card wait + 0.5 s</code>
+        </header>
+        <div class="meal__body real">
+          <img id="heroImg" class="meal__img" alt="" />
+          <div class="meal__info">
+            <p class="meal__id" id="mealId"></p>
+            <h3 class="meal__name" id="mealName"></h3>
+            <p class="meal__where" id="mealWhere"></p>
+            <ul class="tags" id="mealTags"></ul>
+            <p class="mismatch" id="mismatch" hidden></p>
           </div>
-          <ul class="rail real" id="rail"></ul>
-          <span class="sk skeleton sk-rail"></span>
-          <p class="panel__err"></p>
         </div>
-
-        <!-- race demo: real meals, each /meal request waits a simulated delay first -->
-        <div class="panel panel--wide" id="panelRace" data-state="ready">
-          <div class="panel__head">
-            <h2>Race demo cards</h2>
-            <span class="panel__src">L3 · /meal/{id} · simulated delay + 500 ms</span>
-          </div>
-          <p class="muted">Click <b>Chicken</b>, then <b>Lamb</b> within 1 s. Chicken was clicked first but answers last (4 s vs 3 s).</p>
-          <ul class="race">
-            <li><button class="tile race__card" type="button" data-meal="53050" data-name="Ayam Percik" data-delay="4000">
-              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/020z181619788503.jpg" alt="" />
-              <span class="race__delay">4 s</span>
-              <span class="tile__name">Chicken · Ayam Percik</span>
-            </button></li>
-            <li><button class="tile race__card" type="button" data-meal="53262" data-name="Adana kebab" data-delay="3000">
-              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/04axct1763793018.jpg" alt="" />
-              <span class="race__delay">3 s</span>
-              <span class="tile__name">Lamb · Adana kebab</span>
-            </button></li>
-            <li><button class="tile race__card" type="button" data-meal="53281" data-name="Algerian Kefta (Meatballs)" data-delay="2000">
-              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/8rfd4q1764112993.jpg" alt="" />
-              <span class="race__delay">2 s</span>
-              <span class="tile__name">Beef · Algerian Kefta</span>
-            </button></li>
-          </ul>
+        <div class="sk meal__sk">
+          <span class="skeleton sk-hero"></span>
+          <span class="sk-stack">
+            <span class="skeleton sk-line w-40"></span>
+            <span class="skeleton sk-title"></span>
+            <span class="skeleton sk-line w-60"></span>
+          </span>
         </div>
+        <p class="panel__err" id="mealErr"></p>
+      </section>
 
-        <!-- level 2 -->
-        <div class="panel panel--wide" id="panelTiles" data-state="loading">
-          <div class="panel__head">
-            <h2>Meals in the category</h2>
-            <span class="panel__busy">loading…</span>
-            <span class="panel__src">L2 · /category/{name} · 1000 ms</span>
-          </div>
-          <p class="muted real" id="tilesLabel"></p>
-          <ul class="tiles real" id="tiles"></ul>
-          <span class="sk skeleton sk-tiles"></span>
-          <p class="panel__err"></p>
-        </div>
-
-        <!-- level 3 -->
-        <div class="panel panel--wide" id="panelIngredients" data-state="loading">
-          <div class="panel__head">
+      <div class="duo">
+        <section class="panel" id="panelIngredients" data-state="loading">
+          <header class="panel__head">
+            <span class="lvl">L3</span>
             <h2>Ingredients</h2>
-            <span class="panel__src">L3 · /meal/{id} · 500 ms</span>
-          </div>
-          <p class="muted real" id="ingsLabel"></p>
+          </header>
+          <p class="hint real" id="ingsLabel"></p>
           <ul class="ings real" id="ings"></ul>
-          <div class="sk sk-stack">
+          <span class="sk sk-stack">
             <span class="skeleton sk-box"></span>
             <span class="skeleton sk-box"></span>
-          </div>
+          </span>
           <p class="panel__err"></p>
-        </div>
+        </section>
 
-        <div class="panel panel--wide" id="panelSteps" data-state="loading">
-          <div class="panel__head">
+        <section class="panel" id="panelSteps" data-state="loading">
+          <header class="panel__head">
+            <span class="lvl">L3</span>
             <h2>Method</h2>
-            <span class="panel__src">L3 · /meal/{id} · 500 ms</span>
-          </div>
-          <ol class="steps-list real" id="steps"></ol>
-          <div class="sk sk-stack">
+          </header>
+          <ol class="steps real" id="steps"></ol>
+          <span class="sk sk-stack">
             <span class="skeleton sk-line"></span>
             <span class="skeleton sk-line w-90"></span>
             <span class="skeleton sk-line w-70"></span>
-          </div>
+          </span>
           <p class="panel__err"></p>
-        </div>
+        </section>
+      </div>
 
-        <!-- level 4 -->
-        <div class="panel" id="panelDossier" data-state="loading">
-          <div class="panel__head">
+      <div class="duo">
+        <!-- L4 -->
+        <section class="panel" id="panelDossier" data-state="loading">
+          <header class="panel__head">
+            <span class="lvl">L4</span>
             <h2>Ingredient dossier</h2>
-            <span class="panel__src">L4 · /ingredient/{name} · 300 ms</span>
-          </div>
-          <div class="item real">
-            <img class="item__img" id="dossierImg" alt="" />
+            <code class="src">/ingredient/{name} · 0.3 s</code>
+          </header>
+          <div class="dossier real">
+            <img class="dossier__img" id="dossierImg" alt="" />
             <div>
-              <p class="lead-name" id="dossierName"></p>
-              <p class="lead-text" id="dossierMeasure"></p>
+              <p class="dossier__name" id="dossierName"></p>
+              <p class="hint" id="dossierMeasure"></p>
             </div>
           </div>
-          <p class="lead-text real" id="dossierText"></p>
-          <div class="sk sk-stack">
+          <p class="dossier__text real" id="dossierText"></p>
+          <span class="sk sk-stack">
             <span class="skeleton sk-box"></span>
             <span class="skeleton sk-line w-90"></span>
-          </div>
+          </span>
           <p class="panel__err"></p>
-        </div>
+        </section>
 
-        <div class="panel" id="panelCuisine" data-state="loading">
-          <div class="panel__head">
+        <section class="panel" id="panelCuisine" data-state="loading">
+          <header class="panel__head">
+            <span class="lvl">L4</span>
             <h2>More from this cuisine</h2>
-            <span class="panel__src">L4 · /area/{name} · 300 ms</span>
-          </div>
-          <p class="muted real panel__count"></p>
-          <ul class="mini-tiles real" id="cuisineList"></ul>
+            <code class="src">/area/{name} · 0.3 s</code>
+          </header>
+          <p class="hint real panel__count"></p>
+          <ul class="minis real" id="cuisineList"></ul>
           <span class="sk skeleton sk-mini"></span>
           <p class="panel__err"></p>
-        </div>
+        </section>
+      </div>
 
-        <!-- level 5 -->
-        <div class="panel panel--wide" id="panelAlso" data-state="loading">
-          <div class="panel__head">
-            <h2>Meals using the selected ingredient</h2>
-            <span class="panel__src">L5 · /by-ingredient/{canonical name} · 200 ms</span>
-          </div>
-          <p class="muted real panel__count"></p>
-          <ul class="mini-tiles real" id="alsoList"></ul>
-          <span class="sk skeleton sk-mini"></span>
-          <p class="panel__err"></p>
-        </div>
-
+      <!-- L5 -->
+      <section class="panel" id="panelAlso" data-state="loading">
+        <header class="panel__head">
+          <span class="lvl">L5</span>
+          <h2>Meals using the selected ingredient</h2>
+          <code class="src">/by-ingredient/{canonical name} · 0.2 s</code>
+        </header>
+        <p class="hint real panel__count"></p>
+        <ul class="minis real" id="alsoList"></ul>
+        <span class="sk skeleton sk-mini"></span>
+        <p class="panel__err"></p>
       </section>
-    </article>
+
+    </div>
 
     <!-- ===================== request / arrival log ===================== -->
     <aside class="panel logpanel" id="panelLog">
-      <div class="panel__head">
-        <h2>Request / arrival log</h2>
+      <header class="panel__head">
+        <h2>Request log</h2>
         <button class="btn btn--sm" id="clearLog" type="button">Clear</button>
-      </div>
+      </header>
       <ul class="legend">
-        <li><span class="k k--select">SELECT</span> new selection</li>
+        <li><span class="k k--select">SELECT</span> new click</li>
+        <li><span class="k k--wait">DELAY</span> card wait</li>
         <li><span class="k k--start">START</span> request sent</li>
         <li><span class="k k--done">DONE</span> response arrived</li>
         <li><span class="k k--fail">FAIL</span> HTTP / network error</li>
-        <li><span class="k k--ignored">IGNORED</span> stale, not painted</li>
+        <li><span class="k k--abort">ABORTED</span> cancelled</li>
+        <li><span class="k k--ignored">IGNORED</span> not painted</li>
         <li><span class="k k--stale">STALE PAINTED</span> old data shown</li>
       </ul>
       <ol class="log" id="log"></ol>

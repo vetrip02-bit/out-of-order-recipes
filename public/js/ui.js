@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------------ *
  * ui.js - DOM painting shared by both versions.
  *
- * Nothing here decides *whether* to paint; the chains do. Each render takes
+ * Nothing here decides *whether* to paint; the chain does. Each render takes
  * the selection tag of the response it paints so the log can flag a paint
  * that comes from an older selection (only the broken version does that).
  *
@@ -99,7 +99,7 @@ export function failFrom(stage, err) {
     fail('tiles', err, 'Pick another category to retry.');
     for (const name of MEAL_PANELS) notRequested(name, 'Not requested: needs a meal id from /category/{name}.');
   } else {
-    fail('meal', err, 'Choose any meal tile to recover.');
+    fail('meal', err, 'Choose any meal card to recover.');
     for (const name of MEAL_PANELS.slice(1)) notRequested(name, 'Not requested: needs a successful /meal/{id}.');
   }
 }
@@ -123,25 +123,57 @@ export function highlightRail(name) {
     el.classList.toggle('is-current', el.dataset.category === name));
 }
 
-/* ---------- level 2 ---------- */
+/* ---------- level 2: four meal cards, each with its own wait ---------- */
 
-export function renderTiles(category, meals, tag) {
-  log.painted(tag, `meal tiles for "${category}"`);
-  $('#tilesLabel').textContent = `${meals.length} meals in ${category} · click any tile, even while something else is loading`;
-  $('#tiles').innerHTML = meals.map((m) => `
+export function renderCards(category, total, cards, tag) {
+  log.painted(tag, `meal cards for "${category}"`);
+  $('#tilesLabel').textContent =
+    `First ${cards.length} of ${meals(total)} in ${category}. Each card waits a different time before its request, so a card clicked first can answer last.`;
+  $('#tiles').innerHTML = cards.map((m, i) => `
     <li>
-      <button class="tile" type="button" data-meal="${esc(m.id)}" data-name="${esc(m.name)}">
-        <img class="tile__img" src="${esc(asset(m.thumb))}" alt="" loading="lazy" />
-        <span class="tile__name">${esc(m.name)}</span>
-        ${m.area || m.country ? `<span class="tile__area">${esc(m.area || m.country)}</span>` : ''}
+      <button class="mcard" type="button" data-meal="${esc(m.id)}" data-name="${esc(m.name)}" data-delay="${m.delayMs}">
+        <span class="mcard__media">
+          <img class="mcard__img" src="${esc(asset(m.thumb))}" alt="" loading="lazy" />
+          <span class="mcard__delay">${m.delayMs / 1000} s</span>
+        </span>
+        <span class="mcard__body">
+          <span class="mcard__no">Card ${i + 1}</span>
+          <span class="mcard__name">${esc(m.name)}</span>
+          ${m.area || m.country ? `<span class="mcard__area">${esc(m.area || m.country)}</span>` : ''}
+        </span>
+        <span class="mcard__status"></span>
+        <span class="mcard__bar"><i></i></span>
       </button>
     </li>`).join('');
   panel('tiles').dataset.state = 'ready';
 }
 
-export function highlightTile(id) {
-  document.querySelectorAll('.tile').forEach((el) =>
+const cardEl = (id) => document.querySelector(`.mcard[data-meal="${CSS.escape(String(id))}"]`);
+
+export function highlightCard(id) {
+  document.querySelectorAll('.mcard').forEach((el) =>
     el.classList.toggle('is-current', el.dataset.meal === String(id)));
+}
+
+/** a card's /meal request is waiting its delay: show a countdown bar */
+export function cardWaiting(id, ms) {
+  const el = cardEl(id);
+  if (!el) return;
+  clearTimeout(el._fade);
+  el.style.setProperty('--wait', `${ms}ms`);
+  el.querySelector('.mcard__bar').innerHTML = '<i></i>';   // restart the bar
+  el.querySelector('.mcard__status').textContent = ms ? `waiting ${ms / 1000} s…` : 'loading…';
+  el.dataset.status = 'waiting';
+}
+
+/** the card's /meal request ended: answered, aborted or failed */
+export function cardSettled(id, outcome) {
+  const el = cardEl(id);
+  if (!el) return;
+  el.dataset.status = outcome;
+  el.querySelector('.mcard__status').textContent = outcome;
+  clearTimeout(el._fade);
+  el._fade = setTimeout(() => { delete el.dataset.status; }, outcome === 'answered' ? 1500 : 4000);
 }
 
 /* ---------- level 3 ---------- */
@@ -171,7 +203,7 @@ export function renderMeal(meal, tag) {
     || '<li>No instructions published.</li>';
   panel('steps').dataset.state = 'ready';
 
-  $('#ingsLabel').textContent = `${meal.ingredients.length} items · click one to follow it through levels 4 and 5`;
+  $('#ingsLabel').textContent = `${meal.ingredients.length} items · click one to follow it through L4 and L5`;
   $('#ings').innerHTML = meal.ingredients.map((i) => `
     <li>
       <button class="ing" type="button" data-ingredient="${esc(i.name)}">
@@ -214,14 +246,14 @@ export function renderDossier(ingredient, meal, tag) {
 
 /* ---------- levels 4 + 5 ---------- */
 
-export function renderRelated(name, meals, label, tag) {
+export function renderRelated(name, list, label, tag) {
   log.painted(tag, name === 'cuisine' ? `cuisine list (${label})` : `by-ingredient list (${label})`);
-  const list = name === 'cuisine' ? '#cuisineList' : '#alsoList';
-  $(list).innerHTML = meals.slice(0, 16).map((m) => `
+  const target = name === 'cuisine' ? '#cuisineList' : '#alsoList';
+  $(target).innerHTML = list.slice(0, 16).map((m) => `
     <li>
-      <button class="mini-tile" type="button" data-meal="${esc(m.id)}" data-name="${esc(m.name)}">
-        <img class="mini-tile__img" src="${esc(asset(m.thumb))}" alt="" loading="lazy" />
-        <span class="mini-tile__name">${esc(m.name)}</span>
+      <button class="mini" type="button" data-meal="${esc(m.id)}" data-name="${esc(m.name)}">
+        <img class="mini__img" src="${esc(asset(m.thumb))}" alt="" loading="lazy" />
+        <span class="mini__name">${esc(m.name)}</span>
       </button>
     </li>`).join('');
   panel(name).querySelector('.panel__count').textContent = label;
