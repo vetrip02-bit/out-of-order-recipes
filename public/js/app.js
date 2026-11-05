@@ -55,7 +55,7 @@ $('#clearLog').addEventListener('click', () => log.clear());
 document.addEventListener('click', (e) => {
   const category = e.target.closest('[data-category]');
   if (category) {
-    /* the broken version routes category clicks through its (buggy) queue */
+    /* the broken version routes category clicks through its buggy selectCategory */
     const entry = { category: category.dataset.category, label: `category "${category.dataset.category}"` };
     if (chain.selectCategory) chain.selectCategory(entry);
     else chain.run(entry);

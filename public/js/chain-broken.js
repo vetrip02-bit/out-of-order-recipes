@@ -11,15 +11,14 @@
  *
  * Levels always load in order: L1 → L2 → L3 → L4 (both together) → L5.
  *
- * Deliberate extra bugs (broken version only):
- *   BUG 1  a category click is one behind: the rail (L1) highlights the
- *          category just clicked, but L2 → L5 load the category clicked
- *          BEFORE it. Click Chicken, then Dessert: the rail says Dessert,
- *          while tiles, meal, ingredients, dossier and lists are Chicken.
- *   BUG 2  category clicks are queued and run one after another, so a click
- *          made while another category is still loading waits: the older
- *          category's whole chain (L2 → L5) is painted first, and the one
- *          clicked last only appears a little later.
+ * Deliberate extra bug (broken version only):
+ *   BUG    a category click sends its own requests at once (L2 → L5 for the
+ *          clicked category), but afterwards it also reloads the category
+ *          clicked BEFORE it, and that older data paints over L2 → L5.
+ *          Click Chicken, then Dessert: /category/Dessert is requested and
+ *          shown, then /category/Chicken runs again and the tiles, meal,
+ *          ingredients, dossier and lists end up Chicken while the rail
+ *          still highlights Dessert.
  *
  * (`req.tag` only labels rows in the on-page log; nothing here ever compares it.)
  * ------------------------------------------------------------------ */
@@ -50,16 +49,14 @@ export function createBrokenChain() {
         ui.renderRail(categories, req.tag);
         categoryName = categories[state.categoryTurn++ % categories.length].name;
         log.choose(req.tag, categoryName);
-        state.lastClicked = categoryName;            // the next category click loads this one (BUG 1)
+        state.lastClicked = categoryName;            // the next category click reloads this one (BUG)
       }
 
       /* ---------- L2 ---------- */
       if (depth <= 2) {
         stage = 'tiles';
-        ui.highlightRail(entry.railCategory ?? categoryName);
-        if (entry.railCategory && entry.railCategory !== categoryName) {
-          log.choose(req.tag, `loads "${categoryName}" (previous click) instead`);
-        }
+        ui.highlightRail(entry.keepRail ? state.lastClicked : categoryName);
+        if (entry.reload) log.choose(req.tag, `reloads previous "${categoryName}"`);
         const { meals } = await api.category(categoryName, req);
         ui.renderTiles(categoryName, meals, req.tag);
         const pick = meals[state.mealTurn++ % meals.length];
@@ -84,29 +81,16 @@ export function createBrokenChain() {
     }
   }
 
-  /* BUG 2: category clicks wait in a queue and run one after another */
-  const categoryQueue = [];
-  let categoryBusy = false;
-
+  /* BUG: after the clicked category, the previous one is reloaded and paints over it */
   async function selectCategory(entry) {
-    /* BUG 1: the rail shows this click, but L2 → L5 load the category clicked before it */
-    const clicked = entry.category;
-    entry = { ...entry, railCategory: clicked, category: state.lastClicked ?? clicked };
-    state.lastClicked = clicked;
-    ui.highlightRail(clicked);
+    const previous = state.lastClicked;
+    state.lastClicked = entry.category;
+    const tag = log.select(entry.label);
+    ui.highlightRail(entry.category);
 
-    if (categoryBusy) {
-      categoryQueue.push({ ...entry, tag: log.select(`${entry.label} (queued)`) });
-      return;
-    }
-    categoryBusy = true;
-    try {
-      await run(entry);
-      while (categoryQueue.length) {
-        await run(categoryQueue.shift());
-      }
-    } finally {
-      categoryBusy = false;
+    await run({ ...entry, tag, keepRail: true });
+    if (previous && previous !== entry.category) {
+      await run({ category: previous, tag, keepRail: true, reload: true });
     }
   }
 

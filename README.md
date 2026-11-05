@@ -6,23 +6,23 @@ It has two versions, switched with the two buttons at the top of the page:
 
 | Version | URL | What it does |
 |---|---|---|
-| **Broken version** | `http://localhost:5173/?mode=broken` | Plain fetch-and-display. Every response is painted when it arrives, even after a newer selection. It also has two deliberate category-click bugs (see below). |
+| **Broken version** | `http://localhost:5173/?mode=broken` | Plain fetch-and-display. Every response is painted when it arrives, even after a newer selection. It also has a deliberate category-click bug (see below). |
 | **Corrected version** | `http://localhost:5173/?mode=corrected` | Every selection gets a new **generation**. A response may only paint, or start its next request, while its generation is still the latest. |
 
 Both versions load the levels in the same order, L1 → L2 → L3 → L4 (`/area` and `/ingredient`
 together) → L5, for page load, **Run chain again**, category clicks, tile clicks and ingredient
-clicks. The broken version differs in three ways:
+clicks. The broken version differs in two ways:
 
 1. **No stale-response protection** (no generation, no stale check, no abort).
-2. **BUG 1, category content is one click behind:** the category rail (L1) highlights the
-   category you just clicked, but L2 → L5 load the category you clicked **before** it.
-   Example: click **Chicken**, then **Dessert**. The rail shows **Dessert**, but the tiles, meal,
-   ingredients, method, dossier, cuisine and by-ingredient lists all show **Chicken**. The first
-   category click after page load shows the page-load category again (Beef).
-3. **BUG 2, queued category clicks:** a category clicked while another category is still loading
-   waits in a queue, and the older click's whole chain (L2 → L5) is painted first.
+2. **The previous category paints over the clicked one:** every category click sends its own
+   requests at once (L2 → L5 for the clicked category, nothing is blocked or queued). When that
+   chain finishes, the broken code also reloads the category clicked **before** it, and that
+   older data paints over L2 → L5. Example: click **Chicken**, then **Dessert**.
+   `/category/Dessert` is requested and Dessert is shown for about 3 s, then `/category/Chicken`
+   runs again. The tiles, meal, ingredients, method, dossier, cuisine and by-ingredient lists end
+   up showing **Chicken**, while the rail still highlights **Dessert**.
 
-The corrected version has none of these. A category click goes straight to
+The corrected version has neither. A category click goes straight to
 `/category/{clicked name}` → `/meal` → L4 → L5, and only the last-clicked category is painted.
 
 No mock data: every recipe, image and error comes from the assignment API. The original public
@@ -64,7 +64,7 @@ assignment host's URLs.
 | `server.js` | Static server and `/api/mealdb` dev proxy (no dependencies) |
 | `public/index.html` | Page layout: mode buttons, controls, panels, log |
 | `public/js/api.js` | `fetch` wrapper. Uses `encodeURIComponent` for every path value, turns non-2xx and network errors into `ApiError`, logs START / DONE / FAIL |
-| `public/js/chain-broken.js` | **Broken** chain: no generation, no stale checks, plus BUG 1 (`selectCategory` loads the previous click, `state.lastClicked`) and BUG 2 (`selectCategory` queue) |
+| `public/js/chain-broken.js` | **Broken** chain: no generation, no stale checks, plus the category bug (`selectCategory` reloads `state.lastClicked` after the clicked category) |
 | `public/js/chain-corrected.js` | **Corrected** chain: generation counter, `isStale` guard, optional `AbortController` |
 | `public/js/ui.js` | Rendering shared by both versions |
 | `public/js/log.js` | On-page request and arrival log |
@@ -122,8 +122,8 @@ meal on screen came from an older selection.
 | R1 | Slow chain vs fast meal | Let the page finish loading. Click **Run chain again**, then within ~1 s click a *different* meal tile. | `/categories` (2000 ms), followed by `/category`, `/meal`, `/area`, `/ingredient`, `/by-ingredient` | `/meal/{clicked id}` (500 ms) | The clicked meal appears, then about 3.5 s after the restart it is **overwritten** by the restart's meal. Rail and tiles change to the next category. The log shows STALE PAINTED rows and the red "Stale overwrite" box appears. | The clicked meal stays. `/categories` arrives and is **IGNORED**. No `/category/...` request follows. |
 | R2 | Stale error | Click **Test failure** (`/meal/1`), then within ~50 ms click a valid tile. | `/meal/{valid id}` (500 ms) | `/meal/1` → 404 (~100 ms) | The error shows briefly, then the valid meal paints. The result is correct because the newest request happens to finish last. | The 404 is **IGNORED** as a stale error and never shown. The valid meal paints. |
 | R3 | Stale success over an error | Click a valid tile, then within ~50 ms click **Test failure**. | `/meal/{valid id}` (500 ms) | `/meal/1` → 404 (~100 ms) | The 404 shows, then the older valid meal **paints over it**, along with its dossier and by-ingredient list. The "Stale overwrite" box appears. | The 404 stays. The late valid meal is **IGNORED** and no L4 request is sent for it. |
-| B1 | Category content one click behind (broken-only bug) | Let the page finish loading on Beef. Click **Chicken**, wait, then click **Dessert**. | `/category/{previous click}` (1000 ms) | — | Clicking Chicken highlights Chicken but reloads **Beef**. Clicking Dessert highlights Dessert but loads **Chicken** tiles, meal and lists. | Chicken click shows Chicken. Dessert click shows Dessert. |
-| B2 | Second category clicked before the first loads (broken-only bug) | On Beef, click **Dessert**, then click **Pasta** within ~0.5 s. | The first click's full run L2 → L5 (~2.3 s) | — | The rail shows Pasta. The first click's chain paints first, with STALE PAINTED rows, then the queued click runs. Because of BUG 1 they load Beef and then Dessert. | Only Pasta is painted. |
+| B1 | Previous category paints over the clicked one (broken-only bug) | Let the page finish loading on Beef. Click **Chicken**, wait, then click **Dessert**. | `/category/{previous}` and its chain, sent after the clicked chain | `/category/{clicked}` and its chain | `/category/Dessert` → … → `/by-ingredient` is sent and Dessert shows, then `/category/Chicken` → … → `/by-ingredient` runs and Chicken paints over L2 → L5. The rail stays on Dessert. | Only `/category/Dessert` and its chain are sent. Dessert stays. |
+| B2 | Two categories clicked quickly (broken-only bug) | On Beef, click **Chicken**, then **Dessert** within ~0.3 s. | The Dessert click's reload of Chicken | Both clicks' own chains | Both `/category/Chicken` and `/category/Dessert` start at once. Chicken, Dessert, Beef (Chicken's reload of the previous) and Chicken (Dessert's reload) all paint in turn, with STALE PAINTED rows. The page ends on Chicken with Dessert highlighted. | Chicken's responses are IGNORED. Only Dessert is painted. |
 | F1 | Missing meal | Choose `/meal/1 · missing id (404)` and click **Test failure**. Then click any tile. | — | — | The meal panel shows "HTTP 404 – no meal with id 1". Dependent panels say "Not requested". Clicking a tile recovers. | Same |
 | F2 | Invalid meal id | Choose `/meal/0 · invalid id (400)` and click **Test failure**. Then click any tile. | — | — | "HTTP 400 – meal id must be a positive integer", then recovery | Same |
 | F3 | Network failure | Stop the server (Ctrl+C) and click a tile. Then restart with `npm start` and click a tile again. | — | — | "Network error – Failed to fetch" (or the proxy's 502 if only the upstream is unreachable). No uncaught promise error. Recovery after restart. | Same |
@@ -203,45 +203,43 @@ run in Chrome.
   Every chain function catches it. The corrected version first asks `isStale(...)`, so an error
   can only appear if it belongs to the latest selection.
 
-### Test 4 — Category bugs (B1, B2), broken vs corrected
+### Test 4 — Previous category paints over the clicked one (B1, B2), broken vs corrected
 
-- **Prediction:** In the broken version the rail shows the category just clicked, while L2 → L5
-  show the category clicked before it (B1). A second click made while the first is loading waits
-  in a queue (B2). In the corrected version the clicked category is always the one shown.
-- **Observed by Claude, B1 (broken), slow clicks, waiting for each to finish:**
-
-  | Click | Rail highlight | Tiles | Meal |
-  |---|---|---|---|
-  | page load | Beef | 95 meals in Beef | Algerian Kefta (Meatballs) |
-  | Chicken | Chicken | 95 meals in **Beef** | Arepa Pabellón (Beef) |
-  | Dessert | Dessert | 81 meals in **Chicken** | Belgian Waterzooi Chicken |
-  | Pasta | Pasta | 168 meals in **Dessert** | Apam balik (Dessert) |
-
-  The latest-selection line said, for example, `category "Dessert" → loads "Chicken" (previous click) instead`.
-- **Observed by Claude, B2 (broken), fast clicks:** on Beef, clicked **Dessert** (#2), then
-  **Pasta** (#3, queued) 300 ms later. The log showed:
+- **Prediction:** In the broken version every category click sends its own `/category/{clicked}`
+  request, so nothing is blocked. After that chain finishes, the previous category's chain runs
+  again and paints over L2 → L5, while the rail still shows the clicked category. In the
+  corrected version the clicked category is always the one shown.
+- **Observed by Claude, B1 (broken), slow clicks:** after page load on Beef, clicked **Chicken**
+  and waited (it ended on Beef, the category before it), then cleared the log and clicked
+  **Dessert**:
 
   | Time | Selection | Request (level) |
   |---|---|---|
-  | +4.539 s | #2 | `/category/Beef` (L2), Beef tiles painted at +5.666 s as STALE PAINTED |
-  | +5.673 s | #2 | `/meal/53334` (L3) |
-  | +6.221 s / +6.221 s | #2 | `/area/Venezuela` + `/ingredient/Corn%20Arepa…` (L4, together) |
-  | +6.575 s | #2 | `/by-ingredient/Corn%20Arepa…` (L5) |
-  | +6.834 s | #3 | `/category/Dessert` (L2) |
-  | +7.896 s | #3 | `/meal/53111` (L3), "Anzac biscuits" |
-  | +8.447 s / +8.448 s | #3 | `/area/Australian` + `/ingredient/Porridge%20oats` (L4, together) |
-  | +8.825 s | #3 | `/by-ingredient/Porridge%20oats` (L5) |
+  | +13.013 s | #3 | `/category/Dessert` (L2), the clicked category |
+  | +14.088 s | #3 | `/meal/53049` (L3), "Apam balik" |
+  | +14.685 s / +14.686 s | #3 | `/area/Malaysian` + `/ingredient/Milk` (L4, together) |
+  | +15.543 s | #3 | `/by-ingredient/Milk` (L5) |
+  | +15.806 s | #3 | `/category/Chicken` (L2), the previous category reloaded |
+  | +16.873 s | #3 | `/meal/52940` (L3), "Brown Stew Chicken" |
+  | +17.504 s / +17.506 s | #3 | `/area/Jamaican` + `/ingredient/Chicken` (L4, together) |
+  | +17.915 s | #3 | `/by-ingredient/Chicken` (L5) |
 
-  The page ended with **Pasta** highlighted on the rail, but "168 meals in Dessert" and the
-  Dessert meal "Anzac biscuits".
-- **Your observation:** Click Chicken, then Dessert. Rail shows: ______. Tiles show: ______.
-  Meal shown: ______. Corrected version, same clicks, tiles show: ______.
-- **Explanation:** BUG 1 highlights the clicked category on the rail but sends `/category/{name}`
-  with the category from the click before (`state.lastClicked`), so everything that depends on
-  L2 (meal, L4, L5) belongs to the wrong category. BUG 2 makes later clicks wait in a queue, so an
-  older click's chain is painted while the rail already shows the newer one. The corrected chain
-  requests the clicked category, has no queue, and its generation check drops every category
-  response except the latest.
+  Sampled every 0.5 s, the page went "168 meals in Dessert / Apam balik" → "81 meals in Chicken /
+  Brown Stew Chicken" and ended with **Dessert** highlighted on the rail and Chicken everywhere
+  else.
+- **Observed by Claude, B2 (broken), fast clicks:** on Beef, clicked **Chicken** (#2), then
+  **Dessert** (#3) 300 ms later. `/category/Chicken` started at +5.095 s and `/category/Dessert`
+  at +5.401 s, so both requests went out at once. #2 then reloaded `/category/Beef` (+7.641 s)
+  and #3 reloaded `/category/Chicken` (+7.725 s), with STALE PAINTED rows for #2. The page ended on
+  "81 meals in Chicken" / "Brown Stew Chicken" with **Dessert** highlighted.
+- **Your observation:** Click Chicken, wait, then click Dessert. Was `/category/Dessert` sent
+  (yes / no)? What showed first: ______. What showed at the end: ______. Rail highlight: ______.
+  Corrected version, same clicks, final tiles: ______.
+- **Explanation:** The broken `selectCategory` runs the clicked category's chain and then runs
+  the chain again for `state.lastClicked`, the category clicked before. Nothing checks which click
+  is the latest, so the older data is painted last and wins. The corrected chain only requests the
+  clicked category, and its generation check drops every response that is not from the latest
+  selection.
 
 ---
 
@@ -357,8 +355,8 @@ From `public/js/chain-corrected.js`:
 > removed, so no loading state or image from an older selection stays on screen. The old tiles
 > stay clickable."
 
-To compare: `public/js/chain-broken.js` has none of these lines. It also contains the two
-deliberate category-click bugs, marked with `BUG 1` / `BUG 2` comments.
+To compare: `public/js/chain-broken.js` has none of these lines. It also contains the
+deliberate category-click bug, marked with a `BUG` comment.
 
 ---
 
@@ -379,12 +377,12 @@ deliberate category-click bugs, marked with `BUG 1` / `BUG 2` comments.
 4. **The race, corrected:** Click **Corrected version** and repeat the same clicks. The meal stays.
    The log shows `IGNORED stale response /categories`, and no `/category/...` request follows.
    Optionally tick the AbortController box and show `ABORTED`.
-5. **Category bugs (broken only):** In **Broken version**, wait for the page to load on Beef.
-   - Click **Chicken**, then (after it loads) **Dessert**. The rail highlights Dessert, but the
-     tiles, meal, ingredients and lists are Chicken. That is BUG 1, one click behind.
-   - Now click **Pasta** and then quickly **Seafood**. The first click's chain paints first, then
-     the queued one. That is BUG 2.
-   - Repeat in **Corrected version**: the clicked category is always the one shown.
+5. **Category bug (broken only):** In **Broken version**, wait for the page to load on Beef.
+   - Click **Chicken** and wait, then click **Dessert**.
+   - In the log, `/category/Dessert` is sent at once and Dessert appears.
+   - About 3 s later `/category/Chicken` runs again and Chicken paints over the tiles, meal and
+     lists, while the rail still highlights Dessert.
+   - Repeat in **Corrected version**: Dessert stays.
 6. **Failure and recovery:** Click **Test failure** (404) and show the error in the meal panel and
    the "Not requested" panels. Click any tile to recover. Switch the dropdown to `/meal/0` to show
    the 400.
