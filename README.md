@@ -98,10 +98,29 @@ Where you can enter the chain:
 | FAIL | Non-2xx response or network failure |
 | IGNORED | **Corrected version only:** a stale response or error was dropped. Nothing was painted and no follow-up request was sent |
 | ABORTED | Corrected version with the AbortController box ticked: a superseded request was cancelled |
+| DELAY | **Race demo cards only:** the page waits this simulated time before sending `/meal/{id}` |
 | STALE PAINTED | **Broken version only:** a response from an older selection overwrote the screen |
 
 In the broken version, a red **"⚠ Stale overwrite"** box also appears under the meal title when the
 meal on screen came from an older selection.
+
+### Race demo cards (simulated delay)
+
+Above the meal grid there are three real meals from the API, each with a fixed wait before its
+`/meal/{id}` request is sent:
+
+| Card | Meal (real API id) | Simulated delay | Total time to answer |
+|---|---|---|---|
+| Chicken | Ayam Percik (#53050) | 4000 ms | about 4.5 s |
+| Lamb | Adana kebab (#53262) | 3000 ms | about 3.5 s |
+| Beef | Algerian Kefta (Meatballs) (#53281) | 2000 ms | about 2.5 s |
+
+Why a simulated delay: the API answers every `/meal/{id}` in the same ~500 ms, so two meal clicks
+always finish in click order and the race between two meals cannot happen with the real timings.
+The delay is the only artificial wait in the project. It is added in the browser
+(`api.js`, `pause()`), appears as a **DELAY** row in the log, and is followed by a real request to
+the real API. Normal meal tiles have no delay. In the corrected version the wait is cancelled too
+when the AbortController box is ticked.
 
 ---
 
@@ -124,6 +143,7 @@ meal on screen came from an older selection.
 | R3 | Stale success over an error | Click a valid tile, then within ~50 ms click **Test failure**. | `/meal/{valid id}` (500 ms) | `/meal/1` → 404 (~100 ms) | The 404 shows, then the older valid meal **paints over it**, along with its dossier and by-ingredient list. The "Stale overwrite" box appears. | The 404 stays. The late valid meal is **IGNORED** and no L4 request is sent for it. |
 | B1 | Previous category paints over the clicked one (broken-only bug) | Let the page finish loading on Beef. Click **Chicken**, wait, then click **Dessert**. | `/category/{previous}` and its chain, sent after the clicked chain | `/category/{clicked}` and its chain | `/category/Dessert` → … → `/by-ingredient` is sent and Dessert shows, then `/category/Chicken` → … → `/by-ingredient` runs and Chicken paints over L2 → L5. The rail stays on Dessert. | Only `/category/Dessert` and its chain are sent. Dessert stays. |
 | B2 | Two categories clicked quickly (broken-only bug) | On Beef, click **Chicken**, then **Dessert** within ~0.3 s. | The Dessert click's reload of Chicken | Both clicks' own chains | Both `/category/Chicken` and `/category/Dessert` start at once. Chicken, Dessert, Beef (Chicken's reload of the previous) and Chicken (Dessert's reload) all paint in turn, with STALE PAINTED rows. The page ends on Chicken with Dessert highlighted. | Chicken's responses are IGNORED. Only Dessert is painted. |
+| R4 | Earlier click answers later (race demo cards) | Click the **Chicken** race card (4 s), then the **Lamb** card (3 s) within 1 s. | `/meal/53050` (4000 ms simulated + 500 ms) | `/meal/53262` (3000 ms simulated + 500 ms) | Lamb paints first, then Chicken's late answer **paints over it**, along with Chicken's dossier, cuisine and by-ingredient lists. The "Stale overwrite" box appears. | Lamb stays. Chicken's response is **IGNORED** and no L4 request is sent for it. With the abort box ticked, Chicken is ABORTED during its wait. |
 | F1 | Missing meal | Choose `/meal/1 · missing id (404)` and click **Test failure**. Then click any tile. | — | — | The meal panel shows "HTTP 404 – no meal with id 1". Dependent panels say "Not requested". Clicking a tile recovers. | Same |
 | F2 | Invalid meal id | Choose `/meal/0 · invalid id (400)` and click **Test failure**. Then click any tile. | — | — | "HTTP 400 – meal id must be a positive integer", then recovery | Same |
 | F3 | Network failure | Stop the server (Ctrl+C) and click a tile. Then restart with `npm start` and click a tile again. | — | — | "Network error – Failed to fetch" (or the proxy's 502 if only the upstream is unreachable). No uncaught promise error. Recovery after restart. | Same |
@@ -240,6 +260,39 @@ run in Chrome.
   is the latest, so the older data is painted last and wins. The corrected chain only requests the
   clicked category, and its generation check drops every response that is not from the latest
   selection.
+
+
+### Test 5 — Earlier click answers later (R4, race demo cards), broken vs corrected
+
+- **Prediction:** Chicken is clicked first but takes 4 s + 500 ms; Lamb is clicked 0.3 s later and
+  takes 3 s + 500 ms, so Lamb's answer arrives first. The broken version paints Lamb and then
+  Chicken over it. The corrected version keeps Lamb.
+- **Observed by Claude, broken version:** clicked **Chicken** (#2), then **Lamb** (#3) 300 ms later.
+
+  | Time | Selection | Log row |
+  |---|---|---|
+  | +5.351 s | #2 | DELAY `/meal/53050`, 4000 ms |
+  | +5.654 s | #3 | DELAY `/meal/53262`, 3000 ms |
+  | +8.656 s | #3 | START `/meal/53262` |
+  | +9.223 s | #3 | DONE `/meal/53262`, Lamb "Adana kebab" painted, then `/area/Turkish` + `/ingredient/Romano%20Pepper` |
+  | +9.353 s | #2 | START `/meal/53050` |
+  | +10.006 s | #2 | DONE `/meal/53050` |
+  | +10.007 s | #2 | **STALE PAINTED** meal "Ayam Percik" (#53050) over newer selection #3 |
+  | +10.012 s | #2 | `/area/Malaysian` + `/ingredient/Chicken%20Thighs`, then `/by-ingredient/Chicken%20Thighs` |
+
+  The page ended on **Ayam Percik** (Chicken · Malaysian) with the red "Stale overwrite" box,
+  although the latest selection was Lamb.
+- **Observed by Claude, corrected version:** same clicks. `/meal/53050` was sent at +9.095 s and
+  answered at +9.702 s, then logged `IGNORED stale response /meal/53050 (from #2, latest is #3)`.
+  No L4 request was sent for Chicken. The page stayed on **Adana kebab** (Lamb · Turkish). With
+  the abort box ticked, Chicken was `ABORTED … cancelled after 307 ms`, during its wait, and never
+  reached the API.
+- **Your observation:** Broken, final meal: ______. Corrected, final meal: ______.
+  Time between Lamb's DONE and Chicken's DONE in the broken log: ____ ms.
+- **Explanation:** The broken chain paints whatever `/meal` answer arrives, so the last answer to
+  arrive wins, even though it belongs to the older click. The corrected chain checks
+  `isStale(gen, …)` right after `await api.meal(…)`. Chicken's generation is no longer the latest,
+  so its answer is dropped before it can paint or start L4.
 
 ---
 
@@ -388,6 +441,9 @@ deliberate category-click bug, marked with a `BUG` comment.
    the 400.
 7. **Stale error (corrected):** Click **Test failure**, then immediately click a tile. The log
    shows `IGNORED stale error on /meal/1`, and the valid meal shows.
+8. **Race demo cards:** In **Broken version**, click the **Chicken** card (4 s) and then the
+   **Lamb** card (3 s) within 1 s. Lamb appears first, then Chicken paints over it with the
+   "Stale overwrite" box. Repeat in **Corrected version**: Lamb stays and Chicken is IGNORED.
 
-No artificial delays are added anywhere. The race uses only the API's own 2000 ms vs 500 ms
-timings.
+The only artificial delay is on the three race demo cards (shown as DELAY rows in the log). Every
+other race uses the API's own timings, for example 2000 ms vs 500 ms.

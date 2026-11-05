@@ -163,6 +163,14 @@ body[data-mode="corrected"] .banner { border-color: #b9e0cb; background: var(--o
 .tile__name { font-size: 11.5px; line-height: 1.3; }
 .tile__area { font-size: 10.5px; color: var(--muted); }
 
+/* race demo cards: real meals with a simulated delay before /meal */
+.race { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; max-width: 420px; }
+.race__card { position: relative; width: 100%; }
+.race__delay {
+  position: absolute; top: 10px; left: 10px; padding: 1px 7px; border-radius: 999px;
+  font: 600 11px/1.6 ui-monospace, monospace; color: #fff; background: rgba(0, 0, 0, .65);
+}
+
 /* level 3: recipe */
 .hero__img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
 .tagline { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin: 10px 0 0; padding: 0; list-style: none; }
@@ -216,6 +224,7 @@ body[data-mode="corrected"] .banner { border-color: #b9e0cb; background: var(--o
 .k--ignored { color: var(--warn); background: var(--warn-bg); border-color: #ecd9a6; }
 .k--stale   { color: #fff; background: var(--danger); }
 .k--abort   { color: var(--muted); background: var(--surface); border-color: var(--line-2); }
+.k--wait    { color: var(--warn); background: var(--surface); border-color: #ecd9a6; }
 .log__row--select { background: var(--accent-bg); margin-top: 4px; }
 .log__row--stale { background: var(--danger-bg); }
 .log__row--stale .log__text { color: var(--danger); font-weight: 600; }

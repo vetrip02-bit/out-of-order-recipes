@@ -15,6 +15,7 @@ const LABEL = {
   done: 'DONE',
   fail: 'FAIL',
   abort: 'ABORTED',
+  wait: 'DELAY',
   ignored: 'IGNORED',
   stale: 'STALE PAINTED',
 };
@@ -77,6 +78,7 @@ export const log = {
   done: (tag, url, text) => add(tag, 'done', `${url} · ${text}`),
   fail: (tag, url, text) => add(tag, 'fail', `${url} · ${text}`),
   abort: (tag, url, ms) => add(tag, 'abort', `${url} · cancelled after ${ms} ms`),
+  wait: (tag, url, ms) => add(tag, 'wait', `${url} · simulated delay ${ms} ms before the request is sent`),
 
   /** corrected version: a response (or error) from an older selection was dropped */
   ignored(tag, what, current, err) {

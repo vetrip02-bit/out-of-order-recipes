@@ -32,9 +32,34 @@ export class ApiError extends Error {
   }
 }
 
-/** req = { tag, signal? } - tag labels the log rows with the selection number */
+/* race demo only: wait before sending, so one request can answer later than another */
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('aborted', 'AbortError'));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('aborted', 'AbortError'));
+    }, { once: true });
+  });
+}
+
+/**
+ * req = { tag, signal?, delayMs? } - tag labels the log rows with the selection number;
+ * delayMs (race demo cards only) is a simulated wait before the request is sent
+ */
 async function get(path, req) {
   const url = BASE + path;
+  if (req.delayMs) {
+    log.wait(req.tag, url, req.delayMs);
+    const waited = performance.now();
+    try {
+      await pause(req.delayMs, req.signal);
+    } catch {
+      log.abort(req.tag, url, Math.round(performance.now() - waited));
+      throw new ApiError('request aborted', { path, aborted: true });
+    }
+  }
   const started = performance.now();
   const ms = () => Math.round(performance.now() - started);
   log.start(req.tag, url);

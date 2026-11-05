@@ -8,7 +8,7 @@
  * ever land in the other.
  * ------------------------------------------------------------------ */
 
-import { BASE, DIRECT, HUB } from './api.js';
+import { BASE, DIRECT, HUB, asset } from './api.js';
 import { log } from './log.js';
 import { createBrokenChain } from './chain-broken.js';
 import { createCorrectedChain } from './chain-corrected.js';
@@ -37,6 +37,9 @@ document.title = `${mode === 'broken' ? 'Broken' : 'Corrected'} · Out of Order`
 
 $('#abortToggle').hidden = mode !== 'corrected';
 
+/* race demo card images come from the API host, like every other image */
+for (const img of document.querySelectorAll('.race img[data-thumb]')) img.src = asset(img.dataset.thumb);
+
 const chain = mode === 'broken'
   ? createBrokenChain()
   : createCorrectedChain({ useAbort: () => $('#abortBox').checked });
@@ -63,7 +66,12 @@ document.addEventListener('click', (e) => {
   }
   const meal = e.target.closest('[data-meal]');
   if (meal) {
-    chain.run({ mealId: meal.dataset.meal, label: `meal ${meal.dataset.meal} "${meal.dataset.name}"` });
+    const delayMs = Number(meal.dataset.delay) || 0;   // race demo cards only
+    chain.run({
+      mealId: meal.dataset.meal,
+      delayMs,
+      label: `meal ${meal.dataset.meal} "${meal.dataset.name}"${delayMs ? ` (race card, ${delayMs / 1000} s)` : ''}`,
+    });
     return;
   }
   const ingredient = e.target.closest('[data-ingredient]');

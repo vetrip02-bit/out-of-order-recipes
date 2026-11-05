@@ -91,7 +91,7 @@ export function createCorrectedChain({ useAbort = () => false } = {}) {
       what = `/meal/${mealId}`;
       ui.highlightTile(mealId);
 
-      const { meal } = await api.meal(mealId, req);
+      const { meal } = await api.meal(mealId, { ...req, delayMs: entry.delayMs });
       if (isStale(gen, req, what)) return;
 
       state.meal = meal;

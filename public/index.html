@@ -94,6 +94,32 @@
           <p class="panel__err"></p>
         </div>
 
+        <!-- race demo: real meals, each /meal request waits a simulated delay first -->
+        <div class="panel panel--wide" id="panelRace" data-state="ready">
+          <div class="panel__head">
+            <h2>Race demo cards</h2>
+            <span class="panel__src">L3 · /meal/{id} · simulated delay + 500 ms</span>
+          </div>
+          <p class="muted">Click <b>Chicken</b>, then <b>Lamb</b> within 1 s. Chicken was clicked first but answers last (4 s vs 3 s).</p>
+          <ul class="race">
+            <li><button class="tile race__card" type="button" data-meal="53050" data-name="Ayam Percik" data-delay="4000">
+              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/020z181619788503.jpg" alt="" />
+              <span class="race__delay">4 s</span>
+              <span class="tile__name">Chicken · Ayam Percik</span>
+            </button></li>
+            <li><button class="tile race__card" type="button" data-meal="53262" data-name="Adana kebab" data-delay="3000">
+              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/04axct1763793018.jpg" alt="" />
+              <span class="race__delay">3 s</span>
+              <span class="tile__name">Lamb · Adana kebab</span>
+            </button></li>
+            <li><button class="tile race__card" type="button" data-meal="53281" data-name="Algerian Kefta (Meatballs)" data-delay="2000">
+              <img class="tile__img" src="" data-thumb="/api/mealdb/meal-thumb/8rfd4q1764112993.jpg" alt="" />
+              <span class="race__delay">2 s</span>
+              <span class="tile__name">Beef · Algerian Kefta</span>
+            </button></li>
+          </ul>
+        </div>
+
         <!-- level 2 -->
         <div class="panel panel--wide" id="panelTiles" data-state="loading">
           <div class="panel__head">

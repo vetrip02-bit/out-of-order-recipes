@@ -67,7 +67,7 @@ export function createBrokenChain() {
       /* ---------- L3 ---------- */
       stage = 'meal';
       ui.highlightTile(mealId);
-      const { meal } = await api.meal(mealId, req);
+      const { meal } = await api.meal(mealId, { ...req, delayMs: entry.delayMs });
       state.meal = meal;
       ui.renderMeal(meal, req.tag);
 
